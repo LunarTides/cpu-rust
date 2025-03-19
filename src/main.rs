@@ -21,10 +21,10 @@ enum Opcode {
 
 enum Register {
     // TODO: Add a better way to detect use of registers.
-    EAX = 0xff,
-    EBX = 0xfe,
-    ECX = 0xfd,
-    EDX = 0xfc,
+    Eax = 0xff,
+    Ebx = 0xfe,
+    Ecx = 0xfd,
+    Edx = 0xfc,
 }
 
 impl TryFrom<usize> for Register {
@@ -32,10 +32,10 @@ impl TryFrom<usize> for Register {
 
     fn try_from(value: usize) -> Result<Self, Self::Error> {
         match value {
-            x if x == Self::EAX as usize => Ok(Self::EAX),
-            x if x == Self::EBX as usize => Ok(Self::EBX),
-            x if x == Self::ECX as usize => Ok(Self::ECX),
-            x if x == Self::EDX as usize => Ok(Self::EDX),
+            x if x == Self::Eax as usize => Ok(Self::Eax),
+            x if x == Self::Ebx as usize => Ok(Self::Ebx),
+            x if x == Self::Ecx as usize => Ok(Self::Ecx),
+            x if x == Self::Edx as usize => Ok(Self::Edx),
             _ => Err(()),
         }
     }
@@ -47,7 +47,7 @@ struct Instruction {
 }
 
 #[derive(Default)]
-struct CPU {
+struct Cpu {
     isp: usize,
     program: Vec<Instruction>,
     running: bool,
@@ -59,7 +59,7 @@ struct CPU {
     edx: usize,
 }
 
-impl CPU {
+impl Cpu {
     fn execute(&mut self) -> Result<(), &'static str> {
         let instruction = self.program.get(self.isp).ok_or("isp overflow")?;
 
@@ -67,7 +67,7 @@ impl CPU {
             Opcode::Move => {
                 let raw_register = instruction
                     .args
-                    .get(0)
+                    .first()
                     .ok_or("too few arguments for mov opcode: missing register")?;
 
                 let register =
@@ -89,7 +89,7 @@ impl CPU {
                 // TODO: Add second argument.
                 let value = instruction
                     .args
-                    .get(0)
+                    .first()
                     .ok_or("too few arguments for add opcode: missing value")?;
 
                 self.eax += value;
@@ -112,19 +112,19 @@ impl CPU {
 
     fn get_register(&self, register: Register) -> &usize {
         match register {
-            Register::EAX => &self.eax,
-            Register::EBX => &self.ebx,
-            Register::ECX => &self.ecx,
-            Register::EDX => &self.edx,
+            Register::Eax => &self.eax,
+            Register::Ebx => &self.ebx,
+            Register::Ecx => &self.ecx,
+            Register::Edx => &self.edx,
         }
     }
 
     fn set_register(&mut self, register: Register, value: usize) {
         match register {
-            Register::EAX => self.eax = value,
-            Register::EBX => self.ebx = value,
-            Register::ECX => self.ecx = value,
-            Register::EDX => self.edx = value,
+            Register::Eax => self.eax = value,
+            Register::Ebx => self.ebx = value,
+            Register::Ecx => self.ecx = value,
+            Register::Edx => self.edx = value,
         };
     }
 
@@ -134,41 +134,42 @@ impl CPU {
 }
 
 fn main() -> Result<(), &'static str> {
-    let mut cpu = CPU::default();
-    cpu.running = true;
-
-    cpu.program = vec![
-        // mov ebx, 34
-        Instruction {
-            opcode: Opcode::Move,
-            args: vec![Register::EBX as usize, 34],
-        },
-        // mov eax, ebx
-        Instruction {
-            opcode: Opcode::Move,
-            args: vec![Register::EAX as usize, Register::EBX as usize],
-        },
-        // add eax, 35
-        Instruction {
-            opcode: Opcode::Add,
-            args: vec![35],
-        },
-        // mov ebx, eax
-        Instruction {
-            opcode: Opcode::Move,
-            args: vec![Register::EBX as usize, Register::EAX as usize],
-        },
-        // mov eax, 0
-        Instruction {
-            opcode: Opcode::Move,
-            args: vec![Register::EAX as usize, Syscall::Exit as usize],
-        },
-        // syscall
-        Instruction {
-            opcode: Opcode::Syscall,
-            args: vec![],
-        },
-    ];
+    let mut cpu = Cpu {
+        running: true,
+        program: vec![
+            // mov ebx, 34
+            Instruction {
+                opcode: Opcode::Move,
+                args: vec![Register::Ebx as usize, 34],
+            },
+            // mov eax, ebx
+            Instruction {
+                opcode: Opcode::Move,
+                args: vec![Register::Eax as usize, Register::Ebx as usize],
+            },
+            // add eax, 35
+            Instruction {
+                opcode: Opcode::Add,
+                args: vec![35],
+            },
+            // mov ebx, eax
+            Instruction {
+                opcode: Opcode::Move,
+                args: vec![Register::Ebx as usize, Register::Eax as usize],
+            },
+            // mov eax, 0
+            Instruction {
+                opcode: Opcode::Move,
+                args: vec![Register::Eax as usize, Syscall::Exit as usize],
+            },
+            // syscall
+            Instruction {
+                opcode: Opcode::Syscall,
+                args: vec![],
+            },
+        ],
+        ..Default::default()
+    };
 
     while cpu.running {
         cpu.execute()?;
