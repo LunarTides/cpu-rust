@@ -15,14 +15,16 @@ impl TryFrom<usize> for Syscall {
 
 enum Opcode {
     Move,
+    Add,
     Syscall,
 }
 
 enum Register {
-    EAX,
-    EBX,
-    ECX,
-    EDX,
+    // TODO: Add a better way to detect use of registers.
+    EAX = 0xff,
+    EBX = 0xfe,
+    ECX = 0xfd,
+    EDX = 0xfc,
 }
 
 impl TryFrom<usize> for Register {
@@ -71,25 +73,34 @@ impl CPU {
                 let register =
                     Register::try_from(*raw_register).or(Err("invalid register for mov opcode"))?;
 
-                let value = instruction
+                let mut value = instruction
                     .args
                     .get(1)
                     .ok_or("too few arguments for mov opcode: missing value")?;
 
+                if let Ok(reg) = Register::try_from(*value) {
+                    value = self.get_register(reg);
+                }
+
                 self.set_register(register, *value);
             }
 
-            Opcode::Syscall => {
-                let raw_syscall = instruction
+            Opcode::Add => {
+                // TODO: Add second argument.
+                let value = instruction
                     .args
                     .get(0)
-                    .ok_or("too few arguments for syscall opcode: missing syscall value")?;
+                    .ok_or("too few arguments for add opcode: missing value")?;
 
-                let syscall = Syscall::try_from(*raw_syscall).unwrap();
+                self.eax += value;
+            }
+
+            Opcode::Syscall => {
+                let syscall = Syscall::try_from(self.eax).or(Err("invalid syscall"))?;
 
                 match syscall {
                     Syscall::Exit => {
-                        self.exit_code = self.eax as u8;
+                        self.exit_code = self.ebx as u8;
                         self.running = false;
                     }
                 }
@@ -97,6 +108,15 @@ impl CPU {
         }
 
         Ok(())
+    }
+
+    fn get_register(&self, register: Register) -> &usize {
+        match register {
+            Register::EAX => &self.eax,
+            Register::EBX => &self.ebx,
+            Register::ECX => &self.ecx,
+            Register::EDX => &self.edx,
+        }
     }
 
     fn set_register(&mut self, register: Register, value: usize) {
@@ -118,13 +138,35 @@ fn main() -> Result<(), &'static str> {
     cpu.running = true;
 
     cpu.program = vec![
+        // mov ebx, 34
         Instruction {
             opcode: Opcode::Move,
-            args: vec![Register::EAX as usize, 42],
+            args: vec![Register::EBX as usize, 34],
         },
+        // mov eax, ebx
+        Instruction {
+            opcode: Opcode::Move,
+            args: vec![Register::EAX as usize, Register::EBX as usize],
+        },
+        // add eax, 35
+        Instruction {
+            opcode: Opcode::Add,
+            args: vec![35],
+        },
+        // mov ebx, eax
+        Instruction {
+            opcode: Opcode::Move,
+            args: vec![Register::EBX as usize, Register::EAX as usize],
+        },
+        // mov eax, 0
+        Instruction {
+            opcode: Opcode::Move,
+            args: vec![Register::EAX as usize, Syscall::Exit as usize],
+        },
+        // syscall
         Instruction {
             opcode: Opcode::Syscall,
-            args: vec![Syscall::Exit as usize],
+            args: vec![],
         },
     ];
 
